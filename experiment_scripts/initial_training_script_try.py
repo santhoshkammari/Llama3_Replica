@@ -1,50 +1,66 @@
 import torch
+from torch.nn import Transformer
 from torch.utils.data import DataLoader, Dataset
+from datasets import load_dataset
 
-# Define your dataset and DataLoader
-class YourDataset(Dataset):
-    def __init__(self, ...):
-        # Initialize your dataset here
+
+
+# Define dataset class
+class TextDataset(Dataset):
+    def __init__(self, dataset):
+        self.dataset = dataset
 
     def __len__(self):
-        # Return the total number of samples in your dataset
+        return len(self.dataset)
 
     def __getitem__(self, idx):
-        # Return a sample from your dataset
+        return self.dataset[idx]["text"], int(self.dataset[idx]["label"])
 
-# Initialize your dataset and DataLoader
-dataset = YourDataset(...)
-dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+# Load IMDb dataset from Hugging Face
+dataset = load_dataset("imdb")
 
-# Initialize your model
-model_args = ModelArgs()  # Initialize with your desired parameters
-model = Transformer(model_args)
+# Preprocess the dataset
+text_dataset = TextDataset(dataset["train"])
 
-# Define your optimizer and loss function
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+# Define DataLoader
+batch_size = 8
+dataloader = DataLoader(text_dataset, batch_size=batch_size, shuffle=True)
+
+# Define the model
+class SimpleTransformer(torch.nn.Module):
+    def __init__(self):
+        super(SimpleTransformer, self).__init__()
+        self.transformer = Transformer(
+            d_model=256,  # Decrease hidden dimension
+            nhead=4,      # Decrease number of attention heads
+            num_encoder_layers=2,  # Decrease number of layers
+            num_decoder_layers=2,
+        )
+
+    def forward(self, x):
+        return self.transformer(x)
+
+model = SimpleTransformer()
+
+# Define optimizer and loss function
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 loss_fn = torch.nn.CrossEntropyLoss()
 
 # Training loop
-num_epochs = 10  # Define your desired number of epochs
+num_epochs = 3
 for epoch in range(num_epochs):
     model.train()
     total_loss = 0.0
     for batch in dataloader:
-        inputs, targets = batch  # Assuming your dataset returns inputs and targets
+        inputs, targets = batch
         optimizer.zero_grad()
         outputs = model(inputs)
-        loss = loss_fn(outputs.view(-1, model.vocab_size), targets.view(-1))
+        loss = loss_fn(outputs.view(-1, outputs.size(-1)), targets)
         loss.backward()
         optimizer.step()
         total_loss += loss.item()
     print(f"Epoch {epoch + 1}, Loss: {total_loss}")
 
-    # Save checkpoint after each epoch
-    checkpoint_path = f"checkpoint_epoch_{epoch + 1}.pt"
-    torch.save({
-        'epoch': epoch,
-        'model_state_dict': model.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict(),
-        'loss': total_loss,
-    }, checkpoint_path)
-    print(f"Checkpoint saved at {checkpoint_path}")
+# Save the model
+torch.save(model.state_dict(), "imdb_model.pt")
+print("Model saved.")
